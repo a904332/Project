@@ -1,0 +1,65 @@
+import zipfile
+from PIL import Image
+import pytesseract
+import cv2 as cv
+import numpy as np
+import io
+import math
+
+# loading the face detection classifier
+face_cascade = cv.CascadeClassifier('readonly/haarcascade_frontalface_default.xml')
+
+# create handle to zipfile
+zip_handle = zipfile.ZipFile('readonly/small_img.zip')
+
+# The word we are looking for
+magic_word = 'Mark'
+
+# loop over the filenames: 
+for filename in zip_handle.namelist():
+    
+    print('Analyzing file "{}".'.format(filename))
+    
+    #extract file from zip in memory
+    get_img = zip_handle.read(filename)
+    
+    # then as a flie type handle
+    fh = io.BytesIO(get_img)
+    img = Image.open(fh).convert('L')
+    img.save(filename)
+    
+    text = pytesseract.image_to_string(img)
+    
+    if magic_word in text:
+        
+        print('Results found in file {}'.format(filename))
+        
+        # We have the file, now it's time to take faces
+        image = cv.imread(filename)
+        gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.35)
+        
+        if len(faces) == 0:
+            
+            print('But there were not faces in that file!')
+            
+        else:
+            
+            xpos = 0
+            ypos = 0
+            first_image = faces[0]
+            rows = math.ceil(len(faces)/5)
+            contact_sheet=Image.new(img.mode, (5*first_image[2],rows*first_image[3]))
+            
+            for x,y,w,h in faces:
+                
+                new_face = img.crop((x,y,x+w,y+h))
+                contact_sheet.paste(new_face, (xpos, ypos) )
+    
+                if xpos + first_image[2] == contact_sheet.width:
+                    xpos = 0
+                    ypos += first_image[3]
+                else:
+                    xpos += first_image[2]
+                    
+            display(contact_sheet)
